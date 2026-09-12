@@ -33,8 +33,15 @@ class BankService:
 
         trans_date = data["date"]
         description = data["description"]
+
         # type_1_text (Credit)
         if type == TransactionType.type_1_text:
+            if amount <= 0:
+                return {
+                    "status": "failed",
+                    "message": "amount should be greater than zero."
+                }
+
             cr_set = CustomerDetails.objects.filter(id=data["customer_id"])
             if len(cr_set) == 0:
                 return {
@@ -85,6 +92,12 @@ class BankService:
             }
         # type_2_text(debit)
         elif type == TransactionType.type_2_text:
+            if amount <= 0:
+                return {
+                    "status": "failed",
+                    "message": "amount should be greater than zero."
+                }
+
             cr_set = CustomerDetails.objects.filter(id=data["customer_id"])
             if len(cr_set) == 0:
                 return {
@@ -207,13 +220,22 @@ class BankService:
         from_date = data["from_date"]
         to_date = data["to_date"]
 
-        result = Transactions.objects.filter(customer_acc_no = account_number,
-                                    date__range  = (from_date, to_date))
-        if len(result) == 0:
+        customer_set = Transactions.objects.filter(customer_acc_no = account_number)
+        if len(customer_set) == 0:
             return {
                 "status": "failed",
                 "message": "invalid account number"
             }
+
+        query_set = Transactions.objects.filter(date__range=(from_date, to_date))
+        if len(query_set) == 0:
+            return {
+                "status": "failed",
+                "message": f"No transactions record found from {from_date} to {to_date}"
+            }
+
+        result = Transactions.objects.filter(customer_acc_no = account_number,
+                                    date__range  = (from_date, to_date))
 
         res_list = []
 
@@ -242,12 +264,12 @@ class BankService:
            }
 
             data = {
+                "account_number": objs.customer_acc_no,
+                "date_range": f"{from_date} To {to_date}",
                 "transaction_type": objs.trans_type,
-                "customer_details": customer_details,
                 "transaction_amount": objs.amount,
                 "transaction_date": objs.date,
                 "description": objs.description,
-                "date_range": f"{from_date} To {to_date}",
                 "opening_balance": objs.opening_balance,
                 "debit": objs.debit,
                 "credit": objs.credit,
