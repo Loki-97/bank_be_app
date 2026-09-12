@@ -288,7 +288,6 @@ class BankService:
         df = pd.json_normalize(resp)
         buffer = io.BytesIO()
 
-
         columns = ['id', 'trans_type', 'customer_id', 'customer_acc_no', 'amount', 'date']
         if len(df) != 0 :
 
