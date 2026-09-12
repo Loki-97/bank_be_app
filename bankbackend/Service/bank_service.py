@@ -83,7 +83,7 @@ class BankService:
             return {
                 "message": f"Amount {amount} successfully credited to {cr_obj.name}"
             }
-        # type_2_text(Debit)
+        # type_2_text(debit)
         elif type == TransactionType.type_2_text:
             cr_set = CustomerDetails.objects.filter(id=data["customer_id"])
             if len(cr_set) == 0:
