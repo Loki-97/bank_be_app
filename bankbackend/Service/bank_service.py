@@ -42,17 +42,43 @@ class BankService:
                 "message": "Customer not found."
             }
             cr_obj = cr_set[0]
-            cr_obj.acc_balance += amount
-            cr_obj.save()
 
-            Transactions.objects.create(
-                trans_type = TransactionType.type_1_text,
-                amount = amount,
-                date = trans_date,
-                customer_id = data["customer_id"],
-                customer_acc_no = cr_obj.acc_number,
-                description = f"{description} to {cr_obj.name}"
-            )
+            if cr_obj.acc_balance == 0:
+
+                ts_obj = Transactions.objects.create(
+                    trans_type = TransactionType.type_1_text,
+                    amount = amount,
+                    date = trans_date,
+                    customer_id = data["customer_id"],
+                    customer_acc_no = cr_obj.acc_number,
+                    description = f"{description} to {cr_obj.name}",
+                    opening_balance = 0,
+                    debit = 0,
+                    credit = amount,
+                    closing_balance = cr_obj.acc_balance
+                )
+                cr_obj.acc_balance += amount
+                cr_obj.save()
+
+                ts_obj.closing_balance += ts_obj.opening_balance + ts_obj.credit
+                ts_obj.save()
+
+            elif cr_obj.acc_balance > 0:
+
+                trn_obj = Transactions.objects.create(
+                    trans_type=TransactionType.type_1_text,
+                    amount=amount,
+                    date=trans_date,
+                    customer_id=data["customer_id"],
+                    customer_acc_no=cr_obj.acc_number,
+                    description=f"{description} to {cr_obj.name}",
+                    opening_balance= cr_obj.acc_balance,
+                    debit=0,
+                    credit = amount,
+                    closing_balance = cr_obj.acc_balance + amount
+                )
+                cr_obj.acc_balance += amount
+                cr_obj.save()
 
             return {
                 "message": f"Amount {amount} successfully credited to {cr_obj.name}"
@@ -68,17 +94,20 @@ class BankService:
             cr_obj = cr_set[0]
             if cr_obj.acc_balance > amount:
 
-                cr_obj.acc_balance -= amount
-                cr_obj.save()
-
-                Transactions.objects.create(
+                trans_obj = Transactions.objects.create(
                     trans_type=TransactionType.type_2_text,
                     amount=amount,
                     date=trans_date,
                     customer_id=data["customer_id"],
                     customer_acc_no=cr_obj.acc_number,
-                    description = description
+                    description = description,
+                    opening_balance = cr_obj.acc_balance,
+                    credit = 0,
+                    debit = amount,
+                    closing_balance = cr_obj.acc_balance - amount
                 )
+                cr_obj.acc_balance -= amount
+                cr_obj.save()
 
                 return {
                     "message": f"Amount {amount} successfully debited from {cr_obj.name}"
@@ -121,33 +150,38 @@ class BankService:
             sender_obj = sender[0]
 
             sender_balance = sender_obj.acc_balance
-
+            receiver_obj = receiver[0]
             if sender_balance >= fund_to_transfer:
-                sender_obj.acc_balance -= fund_to_transfer
-                sender_obj.save()
 
-                receiver_obj = receiver[0]
-                receiver_obj.acc_balance += fund_to_transfer
-                receiver_obj.save()
-
-                Transactions.objects.create(
+                trans_obj = Transactions.objects.create(
                     trans_type="debit",
                     amount=fund_to_transfer,
                     date=trans_date,
                     customer_id=sender_obj.id,
                     customer_acc_no=sender_obj.acc_number,
-                    description = f"Fund {fund_to_transfer} transferred from {sender_obj.name} to {receiver_obj.name}"
-
+                    description = f"Fund {fund_to_transfer} transferred from {sender_obj.name} to {receiver_obj.name}",
+                    opening_balance = sender_obj.acc_balance,
+                    debit = fund_to_transfer,
+                    credit = 0,
+                    closing_balance = sender_obj.acc_balance - fund_to_transfer
                 )
+                sender_obj.acc_balance -= fund_to_transfer
+                sender_obj.save()
+
                 Transactions.objects.create(
                     trans_type="credit",
                     amount=fund_to_transfer,
                     date=trans_date,
                     customer_id=receiver_obj.id,
                     customer_acc_no=receiver_obj.acc_number,
-                    description = f"Fund {fund_to_transfer} Received by {receiver_obj.name} from {sender_obj.name}"
-
+                    description = f"Fund {fund_to_transfer} Received by {receiver_obj.name} from {sender_obj.name}",
+                    opening_balance = receiver_obj.acc_balance,
+                    debit = 0,
+                    credit = fund_to_transfer,
+                    closing_balance = receiver_obj.acc_balance + fund_to_transfer
                 )
+                receiver_obj.acc_balance += fund_to_transfer
+                receiver_obj.save()
 
                 return {
                     "status": "success",
@@ -212,7 +246,12 @@ class BankService:
                 "customer_details": customer_details,
                 "transaction_amount": objs.amount,
                 "transaction_date": objs.date,
-                "description": objs.description
+                "description": objs.description,
+                "date_range": f"{from_date} To {to_date}",
+                "opening_balance": objs.opening_balance,
+                "debit": objs.debit,
+                "credit": objs.credit,
+                "closing_balance": objs.closing_balance
             }
 
             res_list.append(data)
@@ -234,18 +273,19 @@ class BankService:
             df.insert(0, 'S.No', range(1, len(df) + 1))
 
             df.rename(columns={
-            'transaction_type': 'Transaction Type',
-            'customer_details.customer_id': 'Customer ID',
-            'customer_details.customer_name': 'Customer Name',
-            'customer_details.customer_mobile_number': 'Mobile Number',
-            'customer_details.emailId': 'Email',
+            # 'transaction_type': 'Transaction Type',
+            # 'customer_details.customer_id': 'Customer ID',
+            # 'customer_details.customer_name': 'Customer Name',
+            # 'customer_details.customer_mobile_number': 'Mobile Number',
+            # 'customer_details.emailId': 'Email',
+            'transaction_date': 'Transaction Date',
             'customer_details.customer_account_number': 'Account Number',
             'customer_details.account_type': 'Account Type',
-            'customer_details.account_balance': 'Account Balance',
-            'customer_details.bank_name': 'Bank Name',
-            'customer_details.branch_name': 'Branch Name',
-            'transaction_amount': 'Transaction Amount',
-            'transaction_date': 'Transaction Date'
+            # 'customer_details.account_balance': 'Account Balance',
+            # 'customer_details.bank_name': 'Bank Name',
+            # 'customer_details.branch_name': 'Branch Name',
+            # 'transaction_amount': 'Transaction Amount',
+
         }, inplace=True)
 
         writer = pd.ExcelWriter(buffer, engine='xlsxwriter')
